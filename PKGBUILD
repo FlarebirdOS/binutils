@@ -1,6 +1,6 @@
 pkgname=binutils
-pkgver=2.45
-pkgrel=2
+pkgver=2.45.1
+pkgrel=3
 pkgdesc="A set of programs to assemble and manipulate binary and object files"
 arch=('x86_64')
 url="https://www.gnu.org/software/binutils/"
@@ -19,32 +19,44 @@ depends=(
     'libelf'
     'zlib'
     'zstd'
-    )
+)
+makedepends=(
+    'git'
+)
 backup=(etc/gprofng.rc)
 options=(
     '!emptydirs'
     '!distcc'
     '!ccache'
 )
-source=(https://ftp.gnu.org/gnu/binutils/${pkgname}-${pkgver}.tar.xz
-    0001-strip-Don-t-treat-fat-IR-objects-as-plugin-object.patch)
-sha256sums=(c50c0e7f9cb188980e2cc97e4537626b1672441815587f1eab69d2a1bfbef5d2
-    cd1816becb0e992ebc09f2ff66050e4b92fad33f0b7acc833cf513f4e4791d1a)
+source=(git+https://sourceware.org/git/binutils-gdb.git#commit=48324fde1e284293dd3d570dba597cb644921c92
+    gold-warn-unsupported.patch)
+sha256sums=(3e2351760a32f1739f0683da1d4b43e74b42e117867225b88c41c07af6aeec9e
+    2d430b66f84a19c154725ec535280c493be1d34f1a90f95208dce02fecd0e4e4)
+
+pkgver() {
+    cd binutils-gdb
+
+    git describe --abbrev=12 --tags | sed 's/[^-]*-//;s/[^-]*-/&r/;s/-/+/g;s/_/./g'
+}
 
 prepare() {
-    cd ${pkgname}-${pkgver}
+    cd binutils-gdb
 
     # Turn off development mode (-Werror, gas run-time checks, date in sonames)
     sed -i '/^development=/s/true/false/' bfd/development.sh
 
-    # fix https://sourceware.org/bugzilla/show_bug.cgi?id=33246
-    patch -Np1 < ${srcdir}/0001-strip-Don-t-treat-fat-IR-objects-as-plugin-object.patch
+    # Creds @Fedora
+    # Change the gold configuration script to only warn about
+    # unsupported targets.  This allows the binutils to be built with
+    # BPF support enabled.
+    patch -Np1 < ${srcdir}/gold-warn-unsupported.patch
 
     mkdir -v flarebird-build
 }
 
 build() {
-    cd ${pkgname}-${pkgver}/flarebird-build
+    cd binutils-gdb/flarebird-build
 
     local configure_args=(
         --sysconfdir=/etc
@@ -83,7 +95,7 @@ build() {
 }
 
 package() {
-    cd ${pkgname}-${pkgver}/flarebird-build
+    cd binutils-gdb/flarebird-build
 
     make DESTDIR=${pkgdir} tooldir=/usr install
 
@@ -91,4 +103,3 @@ package() {
     rm -f ${pkgdir}/usr/share/man/man1/{dlltool,windres,windmc}*
     rm -rf ${pkgdir}/usr/share/doc/gprofng/
 }
-
